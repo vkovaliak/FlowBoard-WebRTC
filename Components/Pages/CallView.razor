@@ -2,6 +2,7 @@
 @using FlowBoardVideoCalls.Configuration
 @using FlowBoardVideoCalls.Models
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 @inject Microsoft.Extensions.Options.IOptions<WebRtcOptions> WebRtcOptions
 @implements IAsyncDisposable
 
@@ -19,20 +20,44 @@
     </div>
 
     <div class="roster-area">
+        <div class="tile-strip @GridSizeClass">
+            <VideoTile DisplayName="@(DisplayName ?? "Guest")"
+                        IsLocal="true"
+                        HasMedia="@LocalHasVideo"
+                        IsPermissionDenied="@(_hasMediaAccess == false)"
+                        ShowSettingsHint="_showSettingsHint"
+                        IsMuted="_isMicMuted" />
+
+            @* Remote camera-off is now real (ParticipantCameraChanged), not
+               optimistic -- Story 2.5. Remote permission-denied still can't
+               be distinguished from voluntary camera-off (no callback
+               carries that distinction across participants); a remote
+               camera-off tile always renders as voluntary. Known gap, not
+               fixed here -- flagged, not silently papered over. *@
+            @foreach (var participant in _participants)
+            {
+                <VideoTile @key="participant.ConnectionId"
+                            ConnectionId="@participant.ConnectionId"
+                            DisplayName="@participant.DisplayName"
+                            IsLocal="false"
+                            HasMedia="@(!_camerasOff.Contains(participant.ConnectionId))"
+                            HasConnectionIssue="@_connectionIssues.Contains(participant.ConnectionId)"
+                            IsMuted="@_mutedParticipants.Contains(participant.ConnectionId)" />
+            }
+        </div>
+
         @if (_participants.Count == 0)
         {
             <p class="waiting-message">Waiting for others to join…</p>
         }
-        else
-        {
-            <ul class="participant-roster">
-                @foreach (var participant in _participants)
-                {
-                    <li>@participant.DisplayName</li>
-                }
-            </ul>
-        }
     </div>
+
+    <ControlBar HasMediaAccess="@(_hasMediaAccess == true)"
+                IsMuted="_isMicMuted"
+                IsCameraOn="_isCameraOn"
+                OnToggleMic="ToggleMicAsync"
+                OnToggleCamera="ToggleCameraAsync"
+                OnHangUp="HangUpAsync" />
 </div>
 
 @code {
@@ -43,8 +68,35 @@
     public string? DisplayName { get; set; }
 
     private readonly List<ParticipantDto> _participants = new();
+
+    /// <summary>ConnectionIds currently showing the Connection Issue Badge
+    /// (FR-10), muted (FR-15), or camera-off (FR-16). All three are local UI
+    /// state driven by JS callbacks, not server truth carried on
+    /// ParticipantDto -- deliberately kept separate from the roster list.</summary>
+    private readonly HashSet<string> _connectionIssues = new();
+    private readonly HashSet<string> _mutedParticipants = new();
+    private readonly HashSet<string> _camerasOff = new();
+
     private DotNetObjectReference<CallView>? _dotNetRef;
     private bool _copied;
+
+    /// <summary>null = not yet resolved; true = granted; false = denied (Avatar Placeholder).</summary>
+    private bool? _hasMediaAccess;
+    private bool _hasAttemptedRetry;
+    private bool _showSettingsHint;
+
+    /// <summary>Local Control Bar toggle state. Never learned from the hub --
+    /// SetMuteState/SetCameraState broadcast to OthersInGroup only, so this
+    /// client never receives its own ParticipantMuteChanged/CameraChanged
+    /// (Story 1.3's CallHub excludes the caller). These fields are the only
+    /// source of truth for my own button state and my own tile.</summary>
+    private bool _isMicMuted;
+    private bool _isCameraOn = true;
+
+    /// <summary>Local video shows only when media access is granted AND the
+    /// camera hasn't been toggled off -- composes Story 2.1's permission
+    /// gate with this story's toggle state.</summary>
+    private bool LocalHasVideo => _hasMediaAccess == true && _isCameraOn;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -59,12 +111,24 @@
             .Select(s => new { urls = s.Urls })
             .ToArray();
 
-        // Story 1.4 scope: room join + roster plumbing only. Epic 2 (Story
-        // 2.1) extends this same initializeCall entry point with
-        // getUserMedia/local media capture -- no media/RTCPeerConnection
-        // code exists here yet, by design.
         await JS.InvokeVoidAsync("initializeCall", _dotNetRef, RoomId, DisplayName ?? "Guest", iceServers);
     }
+
+    /// <summary>Total tiles including self. Drives the CSS breakpoint class
+    /// (FR-19): 1 = large single tile, 2 = side-by-side, 3-4 = 2x2,
+    /// 5+ = expanding grid with a min-tile-width floor + scroll
+    /// (DESIGN.md/EXPERIENCE.md Responsive &amp; Platform). No participant
+    /// cap exists anywhere (AD-5, FR-9) -- this switch has an unbounded
+    /// default case rather than an upper limit.</summary>
+    private int TileCount => _participants.Count + 1;
+
+    private string GridSizeClass => TileCount switch
+    {
+        1 => "grid-1",
+        2 => "grid-2",
+        3 or 4 => "grid-quad",
+        _ => "grid-many",
+    };
 
     [JSInvokable]
     public void OnParticipantJoined(ParticipantDto participant)
@@ -80,7 +144,131 @@
     public void OnParticipantLeft(string connectionId)
     {
         _participants.RemoveAll(p => p.ConnectionId == connectionId);
+        _connectionIssues.Remove(connectionId);
+        _mutedParticipants.Remove(connectionId);
+        _camerasOff.Remove(connectionId);
         StateHasChanged();
+    }
+
+    /// <summary>Toggles the Connection Issue Badge for exactly one peer
+    /// (FR-10, AD-8) -- webrtc-mesh.js reports this from a handler scoped to
+    /// a single RTCPeerConnection, so this callback never touches any other
+    /// participant's state. Purely informational: no retry action exists.</summary>
+    [JSInvokable]
+    public void OnConnectionIssue(string connectionId, bool hasIssue)
+    {
+        if (hasIssue)
+        {
+            _connectionIssues.Add(connectionId);
+        }
+        else
+        {
+            _connectionIssues.Remove(connectionId);
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>FR-15: mirrors another participant's mute state onto their
+    /// tile only.</summary>
+    [JSInvokable]
+    public void OnParticipantMuteChanged(string connectionId, bool isMuted)
+    {
+        if (isMuted)
+        {
+            _mutedParticipants.Add(connectionId);
+        }
+        else
+        {
+            _mutedParticipants.Remove(connectionId);
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>FR-16: mirrors another participant's camera state onto
+    /// their tile only -- swaps to the Avatar Placeholder, never a frozen
+    /// frame, since HasMedia flips off entirely rather than just hiding the
+    /// video element.</summary>
+    [JSInvokable]
+    public void OnParticipantCameraChanged(string connectionId, bool isCameraOn)
+    {
+        if (isCameraOn)
+        {
+            _camerasOff.Remove(connectionId);
+        }
+        else
+        {
+            _camerasOff.Add(connectionId);
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>Reports the outcome of the initial getUserMedia prompt *and*
+    /// every retryMediaPermission() attempt (Signaling &amp; Interop Contract).
+    /// Distinguishing "first denial" from "retry denial" -- and therefore
+    /// when to show the browser-settings hint -- is tracked here in C#, not
+    /// in JS, so media.js stays a dumb reporter of granted/denied only.</summary>
+    [JSInvokable]
+    public void OnMediaPermissionResult(bool granted)
+    {
+        _hasMediaAccess = granted;
+
+        if (granted)
+        {
+            _showSettingsHint = false;
+        }
+        else if (_hasAttemptedRetry)
+        {
+            _showSettingsHint = true;
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>Story 2.1's retry affordance and this story's mute toggle
+    /// share one Control Bar button: while media access isn't granted,
+    /// clicking Mic retries permission instead of toggling mute.</summary>
+    private async Task ToggleMicAsync()
+    {
+        if (_hasMediaAccess != true)
+        {
+            await RetryMediaPermissionAsync();
+            return;
+        }
+
+        _isMicMuted = !_isMicMuted;
+        await JS.InvokeVoidAsync("toggleMic");
+    }
+
+    /// <summary>Same dual-purpose pattern as ToggleMicAsync, for the Camera button.</summary>
+    private async Task ToggleCameraAsync()
+    {
+        if (_hasMediaAccess != true)
+        {
+            await RetryMediaPermissionAsync();
+            return;
+        }
+
+        _isCameraOn = !_isCameraOn;
+        await JS.InvokeVoidAsync("toggleCamera");
+    }
+
+    private async Task RetryMediaPermissionAsync()
+    {
+        _hasAttemptedRetry = true;
+        await JS.InvokeVoidAsync("retryMediaPermission", _dotNetRef);
+    }
+
+    /// <summary>FR-18: JS tears down every peer connection and local media,
+    /// then stops the hub connection (triggering OnDisconnectedAsync server-
+    /// side). Navigation back to Room Entry is this method's job, not JS's
+    /// (AD-1: navigation is a C# concern).</summary>
+    private async Task HangUpAsync()
+    {
+        await JS.InvokeVoidAsync("hangUp");
+        Nav.NavigateTo("/");
     }
 
     private async Task CopyRoomIdAsync()

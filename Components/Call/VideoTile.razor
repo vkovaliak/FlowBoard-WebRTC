@@ -1,0 +1,110 @@
+@* Renders one participant's video, with the Avatar Placeholder overlaid on
+   top when camera is off/unavailable (EXPERIENCE.md Component Patterns).
+   The <video> element is ALWAYS mounted, never conditionally removed: a
+   video element carries both tracks of its stream, not just the picture, so
+   removing it to show the placeholder would silence audio playback too --
+   camera and mic are independent per FR-15/FR-16, and the fix must not
+   couple them back together. The placeholder is an opaque, absolutely-
+   positioned overlay that visually covers the (still-playing) video. *@
+
+<div class="video-tile">
+    <video id="@ElementId" autoplay playsinline muted="@IsLocal"></video>
+
+    @if (!HasMedia)
+    {
+        <div class="avatar-placeholder"
+             style="background: var(--color-avatar-@AvatarIndex); color: var(--color-avatar-@(AvatarIndex)-foreground);"
+             role="img"
+             aria-label="@AltText">
+            <span aria-hidden="true">@Initials</span>
+        </div>
+
+        @if (IsPermissionDenied)
+        {
+            <div class="unavailable-caption">Camera and microphone unavailable</div>
+
+            @if (ShowSettingsHint)
+            {
+                <p class="settings-hint">Enable camera/mic access in your browser settings.</p>
+            }
+        }
+    }
+
+    @if (HasConnectionIssue)
+    {
+        <div class="connection-issue-badge" role="img" aria-label="Connection issue with @DisplayName" title="Connection issue">
+            <span aria-hidden="true">⚠</span>
+        </div>
+    }
+
+    @if (IsMuted)
+    {
+        <div class="mute-indicator" role="img" aria-label="@($"{DisplayName} is muted")" title="Muted">
+            <span aria-hidden="true">🔇</span>
+        </div>
+    }
+
+    <div class="name-label-chip">@DisplayName</div>
+</div>
+
+@code {
+    [Parameter] public string ConnectionId { get; set; } = string.Empty;
+    [Parameter] public string DisplayName { get; set; } = string.Empty;
+    [Parameter] public bool IsLocal { get; set; }
+    [Parameter] public bool HasMedia { get; set; }
+    [Parameter] public bool IsPermissionDenied { get; set; }
+    [Parameter] public bool ShowSettingsHint { get; set; }
+
+    /// <summary>FR-10: purely informational -- deliberately no retry/dismiss
+    /// action wired to this badge anywhere.</summary>
+    [Parameter] public bool HasConnectionIssue { get; set; }
+
+    /// <summary>FR-15: shown on both local and remote tiles for symmetry --
+    /// pairs the icon with an aria-label/title, never color/shape alone
+    /// (UX-DR9).</summary>
+    [Parameter] public bool IsMuted { get; set; }
+
+    /// <summary>DOM id webrtc-mesh.js targets to attach a stream (local:
+    /// fixed "local-video"; remote: keyed by connectionId so multiple remote
+    /// tiles never collide -- matches AD-8's per-pair identity).</summary>
+    private string ElementId => IsLocal ? "local-video" : $"remote-video-{ConnectionId}";
+
+    private string Initials
+    {
+        get
+        {
+            var parts = DisplayName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length switch
+            {
+                >= 2 => $"{parts[0][0]}{parts[1][0]}".ToUpperInvariant(),
+                1 when parts[0].Length >= 2 => parts[0][..2].ToUpperInvariant(),
+                1 => parts[0].ToUpperInvariant(),
+                _ => "?",
+            };
+        }
+    }
+
+    /// <summary>Deterministic 1-6 index into DESIGN.md's avatar palette, hashed
+    /// from DisplayName so the same name always gets the same color (DESIGN.md
+    /// Colors: "assigned deterministically by hashing each Participant's
+    /// Display Name").</summary>
+    private int AvatarIndex
+    {
+        get
+        {
+            var hash = 0;
+            foreach (var c in DisplayName)
+            {
+                hash = (hash * 31 + c) % 6;
+            }
+
+            return Math.Abs(hash) + 1;
+        }
+    }
+
+    /// <summary>Alt text distinguishing voluntary camera-off from
+    /// permission-denied for screen reader users (UX-DR9).</summary>
+    private string AltText => IsPermissionDenied
+        ? $"{DisplayName}, camera and microphone unavailable"
+        : $"{DisplayName}, camera off";
+}

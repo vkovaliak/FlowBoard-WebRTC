@@ -1,0 +1,46 @@
+@* Fixed order per DESIGN.md.Components: Mic, Camera, Share Screen, Hang Up.
+   Mic/Camera never carry the HTML `disabled` attribute -- while media access
+   hasn't been granted, clicking them retries permission instead of toggling
+   (Story 2.1 AC), so they must stay clickable in every state. Share Screen
+   is present but functionally inert until Story 3.1. *@
+
+<div class="control-bar">
+    <button type="button"
+            class="control-button @(!HasMediaAccess || IsMuted ? "toggled-off" : "")"
+            aria-label="@MicAriaLabel"
+            @onclick="OnToggleMic">
+        <span aria-hidden="true">@(IsMuted || !HasMediaAccess ? "🔇" : "🎤")</span>
+    </button>
+
+    <button type="button"
+            class="control-button @(!HasMediaAccess || !IsCameraOn ? "toggled-off" : "")"
+            aria-label="@CameraAriaLabel"
+            @onclick="OnToggleCamera">
+        <span aria-hidden="true">📷</span>
+    </button>
+
+    <button type="button" class="control-button" aria-label="Share screen">
+        <span aria-hidden="true">🖥️</span>
+    </button>
+
+    <button type="button" class="control-button hang-up-button" aria-label="Hang up" @onclick="OnHangUp">
+        <span aria-hidden="true">⏻</span>
+    </button>
+</div>
+
+@code {
+    [Parameter] public bool HasMediaAccess { get; set; }
+    [Parameter] public bool IsMuted { get; set; }
+    [Parameter] public bool IsCameraOn { get; set; }
+    [Parameter] public EventCallback OnToggleMic { get; set; }
+    [Parameter] public EventCallback OnToggleCamera { get; set; }
+    [Parameter] public EventCallback OnHangUp { get; set; }
+
+    private string MicAriaLabel => !HasMediaAccess
+        ? "Enable microphone access"
+        : IsMuted ? "Unmute microphone" : "Mute microphone";
+
+    private string CameraAriaLabel => !HasMediaAccess
+        ? "Enable camera access"
+        : IsCameraOn ? "Turn camera off" : "Turn camera on";
+}

@@ -1,0 +1,54 @@
+.control-bar {
+    position: fixed;
+    bottom: var(--spacing-4);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: var(--spacing-2);
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--rounded-full);
+    padding: var(--spacing-2);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    z-index: 10;
+}
+
+.control-button {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--rounded-full);
+    border: none;
+    background: transparent;
+    color: var(--color-foreground);
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.control-button:hover {
+    background: var(--color-surface);
+}
+
+/* Recessed, not alarmed -- off is a normal, reversible state (DESIGN.md
+   Components: Control Button). */
+.control-button.toggled-off {
+    background: var(--color-surface);
+}
+
+.control-button.toggled-off:hover {
+    background: var(--color-background);
+}
+
+/* Hang Up is always a filled destructive-red circle, never just an
+   outline/icon-only like its neighbors -- reads as categorically different,
+   the one irreversible action in the bar (DESIGN.md Components). */
+.hang-up-button {
+    background: var(--color-destructive);
+    color: var(--color-destructive-foreground);
+}
+
+.hang-up-button:hover {
+    background: var(--color-destructive-hover);
+}
