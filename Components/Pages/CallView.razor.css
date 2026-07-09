@@ -35,19 +35,92 @@
 .roster-area {
     flex: 1;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: var(--spacing-4);
+    padding: var(--spacing-4);
+    /* Bottom padding clears the fixed Control Bar (~44px button height +
+       its own spacing-4 offset from the viewport edge) so the last row of
+       tiles is never hidden behind it. */
+    padding-bottom: 76px;
+    /* topbar is 40px + its 1px border; leaves the rest of the viewport for
+       the grid so grid-many's max-height (below) can size itself against
+       what's actually left, not the full viewport. */
+    min-height: calc(100vh - 41px);
+    box-sizing: border-box;
+}
+
+/* Adaptive Grid (FR-19/FR-20). Breakpoint is driven by CallView.razor's
+   GridSizeClass (participant count), not by CSS alone -- DESIGN.md's
+   breakpoints (1 / 2 / 3-4 / 5+) aren't expressible as pure CSS selectors
+   against an arbitrary tile count. Ample-width sizing lives here; the
+   narrow-window reflow (EXPERIENCE.md Responsive & Platform) lives in the
+   media query below. */
+.tile-strip {
+    display: grid;
+    gap: var(--spacing-3);
+    width: 100%;
+    max-width: 1400px;
+    flex: 1;
+}
+
+.tile-strip.grid-1 {
+    grid-template-columns: 1fr;
+    max-width: 800px;
+}
+
+.tile-strip.grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+    grid-auto-rows: minmax(240px, 1fr);
+}
+
+.tile-strip.grid-quad {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+}
+
+.tile-strip.grid-many {
+    /* The idiomatic CSS Grid pattern for "keep expanding columns, shrink
+       tiles, but never below a floor, then wrap": each column is at least
+       grid-min-tile-width (180px) and grows to fill remaining space. No
+       participant cap exists (AD-5, FR-9), so this must scale to any N
+       without a hardcoded rule per count -- it always scrolls rather than
+       ever clipping content, regardless of viewport width. */
+    grid-template-columns: repeat(auto-fit, minmax(var(--spacing-grid-min-tile-width), 1fr));
+    grid-auto-rows: minmax(160px, 1fr);
+    max-height: 100%;
+    overflow-y: auto;
+    align-content: start;
+}
+
+/* Narrow window (EXPERIENCE.md Responsive & Platform, < narrow-window-
+   breakpoint = 1200px -- hardcoded here since CSS custom properties cannot
+   be used inside an @media condition). */
+@media (max-width: 1200px) {
+    /* Low counts (<=4): reflow to a single column, tiles stay full-height,
+       rather than staying cramped side-by-side. */
+    .tile-strip.grid-1,
+    .tile-strip.grid-2,
+    .tile-strip.grid-quad {
+        grid-template-columns: 1fr;
+        grid-template-rows: none;
+        max-width: 100%;
+    }
+
+    .tile-strip.grid-1 .video-tile,
+    .tile-strip.grid-2 .video-tile,
+    .tile-strip.grid-quad .video-tile {
+        min-height: 60vh;
+    }
+
+    /* High count (5+): the min-tile-width floor plus vertical scroll is
+       already grid-many's baseline behavior above -- nothing additional
+       needed here, this rule documents that it's the same behavior at any
+       width, per the Responsive & Platform table. */
 }
 
 .waiting-message {
     color: var(--color-foreground-muted);
-    font-size: var(--font-body-size);
-}
-
-.participant-roster {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    color: var(--color-foreground);
     font-size: var(--font-body-size);
 }

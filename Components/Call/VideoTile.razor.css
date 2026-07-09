@@ -1,0 +1,113 @@
+.video-tile {
+    position: relative;
+    /* Fills whatever size its Grid cell computes (CallView.razor.css owns
+       the breakpoint/column logic) -- a tile is never a fixed pixel size,
+       so the Grid can actually adapt (FR-19). min-height/min-width keep a
+       tile legible even before Grid sizing settles. */
+    width: 100%;
+    height: 100%;
+    min-width: var(--spacing-grid-min-tile-width);
+    min-height: 135px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--rounded-lg);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.video-tile video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.avatar-placeholder {
+    position: absolute;
+    inset: 0;
+    /* Must stay opaque -- it covers the still-playing <video> element
+       underneath (see VideoTile.razor's comment on why <video> is never
+       removed from the DOM). */
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display-family);
+    font-size: var(--font-display-size);
+    font-weight: var(--font-display-weight);
+}
+
+.unavailable-caption {
+    position: absolute;
+    bottom: 64px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: var(--font-caption-size);
+    color: rgba(255, 255, 255, 0.85);
+    z-index: 2;
+}
+
+.settings-hint {
+    position: absolute;
+    bottom: 32px;
+    left: var(--spacing-2);
+    right: var(--spacing-2);
+    text-align: center;
+    font-size: var(--font-caption-size);
+    color: var(--color-warning);
+    margin: 0;
+    z-index: 2;
+}
+
+/* Connection Issue Badge sits at the true top-right corner; Mute Indicator
+   sits closer to center (DESIGN.md Components: "offset from the Mute
+   Indicator when both are present"). */
+.connection-issue-badge {
+    position: absolute;
+    top: var(--spacing-2);
+    right: var(--spacing-2);
+    width: 22px;
+    height: 22px;
+    border-radius: var(--rounded-full);
+    background: var(--color-warning);
+    color: var(--color-connection-issue-foreground);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    line-height: 1;
+    z-index: 2;
+}
+
+.mute-indicator {
+    position: absolute;
+    top: var(--spacing-2);
+    right: 36px;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--rounded-full);
+    background: rgba(0, 0, 0, 0.55);
+    color: var(--color-foreground);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    line-height: 1;
+    z-index: 2;
+}
+
+.name-label-chip {
+    position: absolute;
+    bottom: var(--spacing-2);
+    left: var(--spacing-2);
+    background: rgba(0, 0, 0, 0.55);
+    color: var(--color-foreground);
+    font-family: var(--font-label-family);
+    font-size: var(--font-label-size);
+    font-weight: var(--font-label-weight);
+    border-radius: var(--rounded-sm);
+    padding: var(--spacing-1) var(--spacing-2);
+    z-index: 1;
+}
