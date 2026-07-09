@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FlowBoard Video Calls — Screen-share layout (key screen)</title>
+<style>
+/*
+  Governed by: EXPERIENCE.md → Component Patterns ("Screen-share layout" row),
+  State Patterns ("Screen sharing active"), Key Flows → Flow 2 (Alex shares
+  his screen). Tokens from: DESIGN.md frontmatter + Components section.
+  Demonstrates PRD FR-21 (screen-share-priority layout).
+*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: #0E0E0E;
+  color: #F2F2F2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+.frame {
+  width: 1100px;
+  height: 680px;
+  background: #1A1A1A;
+  border: 1px solid #3A3A3A;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.topbar {
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  font-family: 'Cascadia Code', 'SF Mono', Consolas, monospace;
+  font-size: 12px;
+  color: #A3A3A3;
+  border-bottom: 1px solid #3A3A3A;
+  justify-content: space-between;
+}
+.copy-hint { color: #2DD4BF; font-size: 11px; }
+.layout {
+  flex: 1;
+  display: flex;
+  position: relative;
+  padding: 14px;
+  gap: 14px;
+}
+.main-share {
+  flex: 1;
+  background: #0F1E1C;
+  border: 1px solid #2DD4BF;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.share-fake-window {
+  width: 86%;
+  height: 80%;
+  background: #17181A;
+  border-radius: 8px;
+  border: 1px solid #333;
+  padding: 16px;
+  font-family: 'Cascadia Code', 'SF Mono', Consolas, monospace;
+  font-size: 13px;
+  color: #7FE7D6;
+  overflow: hidden;
+}
+.share-fake-window .line { opacity: 0.85; margin-bottom: 6px; }
+.share-fake-window .dim { color: #57605e; }
+.share-chip {
+  position: absolute;
+  top: 12px; left: 12px;
+  background: rgba(0,0,0,0.6);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  z-index: 2;
+}
+.thumb-strip {
+  width: 170px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+.thumb {
+  position: relative;
+  height: 110px;
+  border-radius: 14px;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.tile-video { background: linear-gradient(135deg, #1f3d3a 0%, #14211f 100%); }
+.chip {
+  position: absolute;
+  bottom: 6px; left: 6px;
+  background: rgba(0,0,0,0.55);
+  color: #F2F2F2;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 6px;
+  z-index: 2;
+}
+.avatar {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 600;
+}
+.a4 { background: #60A5FA; color: #06213A; }
+.mute {
+  position: absolute;
+  top: 6px; right: 6px;
+  width: 18px; height: 18px;
+  border-radius: 9999px;
+  background: rgba(0,0,0,0.55);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px;
+  z-index: 2;
+}
+.bar {
+  position: absolute;
+  bottom: 14px; left: 50%; transform: translateX(-50%);
+  background: #2E2E2E;
+  border: 1px solid #3A3A3A;
+  border-radius: 9999px;
+  padding: 8px 10px;
+  display: flex;
+  gap: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  z-index: 3;
+}
+.ctl {
+  width: 34px; height: 34px;
+  border-radius: 9999px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  background: transparent;
+  color: #F2F2F2;
+}
+.ctl.active { background: #2DD4BF; color: #0A2320; }
+.ctl.disabled { opacity: 0.4; }
+.ctl.hangup { background: #EF4444; color: #FFFFFF; }
+.tooltip {
+  position: absolute;
+  bottom: 62px; left: 50%; transform: translateX(6px);
+  background: #2E2E2E;
+  border: 1px solid #3A3A3A;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 4;
+}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="topbar">
+    <span>Room: 8F2K-91QZ</span>
+    <span class="copy-hint">⧉ copy link</span>
+  </div>
+  <div class="layout">
+    <div class="main-share">
+      <div class="share-chip">Alex is sharing — editor.blazor</div>
+      <div class="share-fake-window">
+        <div class="line">public class CallHub : Hub</div>
+        <div class="line">{</div>
+        <div class="line dim">&nbsp;&nbsp;// relays offers/answers/ICE candidates</div>
+        <div class="line">&nbsp;&nbsp;public async Task RelayOffer(string peerId, ...)</div>
+        <div class="line">&nbsp;&nbsp;{</div>
+        <div class="line">&nbsp;&nbsp;&nbsp;&nbsp;await Clients.Client(peerId).SendAsync(...);</div>
+        <div class="line">&nbsp;&nbsp;}</div>
+        <div class="line">}</div>
+      </div>
+    </div>
+    <div class="thumb-strip">
+      <div class="thumb tile-video"><div class="chip">Maria (you)</div></div>
+      <div class="thumb tile-video">
+        <div class="chip">Alex</div>
+        <div class="mute">🔇</div>
+      </div>
+      <div class="thumb avatar a4"><div class="chip">Jordan</div>J</div>
+    </div>
+    <div class="bar">
+      <div class="ctl">🎤</div>
+      <div class="ctl">📷</div>
+      <div class="ctl disabled">🖥️</div>
+      <div class="ctl hangup">⏻</div>
+      <div class="tooltip">Alex is sharing their screen</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
