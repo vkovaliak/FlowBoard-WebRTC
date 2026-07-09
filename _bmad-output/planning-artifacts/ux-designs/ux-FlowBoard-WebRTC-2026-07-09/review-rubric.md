@@ -1,0 +1,52 @@
+# Spine Pair Review — FlowBoard Video Calls
+
+## Overall verdict
+The spine pair is well-inherited from the PRD, tokens are near-complete, and the shape/section discipline is strong — DESIGN.md is in canonical order and EXPERIENCE.md carries all required defaults. The pair is downstream-usable as-is, but it has one broken internal cross-reference (a promised "Hang Up confirmation" behavior with no specification anywhere), one undefined but mockup-load-bearing color (avatar initials text), and two of three Key Flows drop or substitute their PRD-sourced edge case. None of these block architecture/story work outright, but each would cause a downstream consumer to either invent behavior or file a clarifying question.
+
+## 1. Flow coverage — adequate
+Checked PRD §2.3 UJ-1/UJ-2/UJ-3 against EXPERIENCE.md Key Flows 1–3. All three UJs have a matching flow with named protagonist, numbered steps, and an explicit `**Climax:**` beat.
+### Findings
+- **medium** Flow 1 (Maria) omits UJ-1's PRD-stated edge case — a mistyped Room ID silently creating a new empty room — entirely; it appears nowhere in EXPERIENCE.md (Key Flows, State Patterns, or Component Patterns) (EXPERIENCE.md "Flow 1 — Maria starts an ad-hoc call"). *Fix:* add a one-line failure/edge note to Flow 1, mirroring the Drift/Quill examples' trailing "Failure: …" line.
+- **medium** Flow 3 retitles Jordan's journey around FR-22 (permission denied) rather than UJ-3's actual PRD edge case (a single failed peer connection, FR-10); FR-10's "connection issue" state only appears as a State Patterns table row, never walked as a flow (EXPERIENCE.md "Flow 3 — Jordan joins with denied permissions"; PRD UJ-3 edge case). *Fix:* either rename Flow 3's framing to acknowledge both scenarios or add a short second flow/failure branch for the per-pair connection failure.
+- **low** Flow 2's UJ-2 edge case (concurrent share attempt while Alex is sharing) is folded into the climax narration rather than given its own "Failure:" line as in the shape examples (EXPERIENCE.md "Flow 2 — Alex shares his screen", step 3). *Fix:* cosmetic only — no missing content, just format drift from the reference shape.
+
+## 2. Token completeness — adequate
+Extracted every frontmatter token (colors, typography, rounded, spacing, components) and every `{path.to.token}` reference in both files' prose. All frontmatter tokens carry hex/values; nearly all prose references resolve.
+### Findings
+- **high** Avatar Placeholder initials text color is never defined anywhere in DESIGN.md (no `avatar-*-foreground` token, no prose color rule) — DESIGN.md only defines the six `avatar-*` *background* hues and reuses `{typography.display}` for sizing (DESIGN.md "Colors" and "Components" → Avatar Placeholder). Yet `mockups/call-view-grid.html` and `call-view-screenshare.html` hardcode six distinct dark text colors per avatar (e.g. `.a1 { color: #3A0E0E }`) that appear nowhere in the spine. *Fix:* add six `avatar-*-foreground` tokens (or one shared high-contrast foreground rule) to DESIGN.md so the mockup's values are source-extractable rather than invented.
+- **low** `components.connection-issue-badge.foreground` is a raw literal (`'#1A1300'`) rather than a named/reused color token, unlike every other component's foreground values (DESIGN.md frontmatter, `connection-issue-badge`). Permitted by the spec (literals are allowed) but inconsistent with the rest of the file's discipline. *Fix:* promote to a named token if it's ever reused; otherwise leave as-is with a one-line rationale.
+- **low** EXPERIENCE.md's Responsive & Platform table introduces raw pixel values (`≥1200px`, `<1200px`, `~180px` minimum tile width) with no corresponding DESIGN.md token (EXPERIENCE.md "Responsive & Platform"). DESIGN.md defines no breakpoint or min-tile-width tokens at all. *Fix:* add these as named tokens in DESIGN.md's Layout & Spacing (or accept as an EXPERIENCE-only behavioral constant, but say so explicitly).
+
+## 3. Component coverage — thin
+Cross-checked DESIGN.md's 11 frontmatter/`Components`-section components against EXPERIENCE.md's `Component Patterns` table (7 rows).
+### Findings
+- **critical** EXPERIENCE.md's Control Bar row states "Toggling never requires a confirmation dialog **except** Hang Up leaving a non-empty room (see Key Flows edge case)" — but no Key Flow, State Pattern, or DESIGN.md component describes this confirmation dialog at all; it does not exist in any of the three Key Flows, and PRD FR-18 describes Hang Up with no confirmation step (EXPERIENCE.md "Component Patterns" → Control Bar row; contrast PRD FR-18). This is a dangling reference to an undefined, PRD-uncorroborated behavior. *Fix:* either remove the claim (Hang Up behaves like every other control, no confirmation, matching FR-18) or fully specify the dialog (trigger condition, copy, DESIGN.md visual spec) — as written, a downstream consumer cannot implement or safely ignore it.
+- **medium** Primary Button, Secondary Button, and Room ID Input each have a named visual spec row in DESIGN.md.Components but no equivalently named row in EXPERIENCE.md.Component Patterns — their behavior is folded into a single "Room Entry form" row (EXPERIENCE.md "Component Patterns"; DESIGN.md "Components"). Adequate for such simple controls, but breaks strict name-for-name traceability the rubric checks for.
+- **low** Name Label Chip, Mute Indicator, Hang Up Button, and Control Button have DESIGN.md visual rows but no matching named EXPERIENCE.md row; their behavior is folded into "Video Tile" and "Control Bar" instead. Content-wise this is mostly covered (e.g. Control Bar row does describe toggle behavior), so this is a naming/traceability gap rather than a missing-content gap.
+
+## 4. State coverage — strong
+Walked both IA surfaces (Room Entry, Call View) against applicable states (empty, cold-load, focus, error, offline, permission-denied).
+### Findings
+- **low** No explicit "submitting" state between Room Entry's Create/Join click and Call View landing (e.g., while the camera/mic permission prompt is pending or media is initializing) — State Patterns jumps from "Room Entry, idle" straight to "Waiting alone" (EXPERIENCE.md "State Patterns"). *Fix:* add a brief transitional state note, even if it's "no loading UI — browser permission prompt is the only visible gap."
+- **low** No state pattern for a total local disconnect (the Blazor Server circuit itself drops, distinct from a single peer's FR-10 failure) — PRD explicitly calls out that auto-reconnect is a non-goal (§5) but EXPERIENCE.md never states what the Participant sees in that case. *Fix:* one line clarifying this falls outside UX scope (infra-level) if that's the intent, so it reads as a deliberate omission rather than a gap.
+
+## 5. Visual reference coverage — strong
+Listed all files in `mockups/` (`room-entry.html`, `call-view-grid.html`, `call-view-screenshare.html`) and `imports/` (empty; no `wireframes/` folder exists). All three mockups are referenced by name in EXPERIENCE.md's Information Architecture section with "Spine wins on conflict" stated once, matching the consolidated-reference convention used in both shape examples (Drift, Quill). No orphans, no unspecific references. Each mockup file's own header comment additionally self-documents which EXPERIENCE.md sections govern it, which is better than either shape example does.
+
+## 6. Bloat & overspecification — strong
+No pixel specs duplicate what tokens already cover (aside from the low-severity breakpoint/tile-width gap noted in §2). No PRD restatement — both files consistently cite PRD sections/FRs by number rather than re-explaining them. DESIGN.md's Brand & Style carries appropriate editorial voice; EXPERIENCE.md stays factual throughout, no editorializing found. The extensive `[ASSUMPTION: ...]` annotations inflate prose somewhat but are all decision-tied, consistent with the PRD's own assumption-tracking discipline, not decorative.
+
+## 7. Inheritance discipline — adequate
+`sources` in EXPERIENCE.md frontmatter resolves to the real PRD file and was read successfully. Glossary terms (Room, Participant, Display Name, Room ID, Grid, Screen Share, Control Bar/Call Controls) are capitalized and used consistently with the PRD Glossary across both spines.
+### Findings
+- **medium** EXPERIENCE.md frontmatter uses `title:` where both shape examples (Drift, Quill) use `name:` for the equivalent field, and gives an absolute Windows path for `sources` rather than the portable `{planning_artifacts}/...` token form both examples use. Not a resolution failure (the path does resolve), but a format inconsistency worth normalizing before this becomes a template for future spines.
+- See §3 for the component-naming inheritance gaps (Primary/Secondary Button, Room ID Input, Name Label Chip, Mute Indicator, Hang Up Button, Control Button not named 1:1 across both files).
+
+## 8. Shape fit — strong
+DESIGN.md sections appear in exact canonical order (Brand & Style → Colors → Typography → Layout & Spacing → Elevation & Depth → Shapes → Components → Do's and Don'ts), all present. EXPERIENCE.md contains all required defaults (Foundation, IA, Voice and Tone, Component Patterns, State Patterns, Interaction Primitives, Accessibility Floor, Key Flows) in the same relative order used by both shape examples, plus Responsive & Platform (required-when-applicable, correctly triggered by the desktop-width-variance content). "Inspiration & Anti-patterns" is omitted; it is not in the required-defaults list and its absence is defensible here (FlowBoard has few competitor-lifted patterns worth naming) — not counted as a finding.
+
+## Mechanical notes
+- Frontmatter completeness: DESIGN.md frontmatter is complete for every section that references it; EXPERIENCE.md frontmatter uses `title`/`created` instead of the `name` field convention seen in both shape examples (see §7).
+- No broken file references among the three mockups — all resolve and were readable.
+- One broken *internal* cross-reference: EXPERIENCE.md → Component Patterns → Control Bar row's "(see Key Flows edge case)" pointer does not correspond to any actual content in Key Flows (see §3, critical finding).
+- Name consistency: Glossary terms consistent. Component names are consistent within DESIGN.md and within EXPERIENCE.md respectively, but not fully 1:1 *across* the two files (six components named in DESIGN.md.Components have no identically-named row in EXPERIENCE.md.Component Patterns; behavior is present but folded under other rows).
