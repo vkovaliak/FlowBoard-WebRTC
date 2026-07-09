@@ -1,0 +1,101 @@
+@page "/call/{RoomId}"
+@using FlowBoardVideoCalls.Configuration
+@using FlowBoardVideoCalls.Models
+@inject IJSRuntime JS
+@inject Microsoft.Extensions.Options.IOptions<WebRtcOptions> WebRtcOptions
+@implements IAsyncDisposable
+
+<PageTitle>FlowBoard Video Calls — @RoomId</PageTitle>
+
+<div class="call-view">
+    <div class="topbar">
+        <span class="room-id-display font-mono" @onclick="CopyRoomIdAsync">
+            Room: @RoomId <span class="copy-icon">⧉</span>
+        </span>
+        @if (_copied)
+        {
+            <span class="copy-confirmation">Copied!</span>
+        }
+    </div>
+
+    <div class="roster-area">
+        @if (_participants.Count == 0)
+        {
+            <p class="waiting-message">Waiting for others to join…</p>
+        }
+        else
+        {
+            <ul class="participant-roster">
+                @foreach (var participant in _participants)
+                {
+                    <li>@participant.DisplayName</li>
+                }
+            </ul>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string RoomId { get; set; } = string.Empty;
+
+    [SupplyParameterFromQuery(Name = "name")]
+    public string? DisplayName { get; set; }
+
+    private readonly List<ParticipantDto> _participants = new();
+    private DotNetObjectReference<CallView>? _dotNetRef;
+    private bool _copied;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        _dotNetRef = DotNetObjectReference.Create(this);
+
+        var iceServers = WebRtcOptions.Value.IceServers
+            .Select(s => new { urls = s.Urls })
+            .ToArray();
+
+        // Story 1.4 scope: room join + roster plumbing only. Epic 2 (Story
+        // 2.1) extends this same initializeCall entry point with
+        // getUserMedia/local media capture -- no media/RTCPeerConnection
+        // code exists here yet, by design.
+        await JS.InvokeVoidAsync("initializeCall", _dotNetRef, RoomId, DisplayName ?? "Guest", iceServers);
+    }
+
+    [JSInvokable]
+    public void OnParticipantJoined(ParticipantDto participant)
+    {
+        if (_participants.All(p => p.ConnectionId != participant.ConnectionId))
+        {
+            _participants.Add(participant);
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public void OnParticipantLeft(string connectionId)
+    {
+        _participants.RemoveAll(p => p.ConnectionId == connectionId);
+        StateHasChanged();
+    }
+
+    private async Task CopyRoomIdAsync()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", RoomId);
+        _copied = true;
+        StateHasChanged();
+        await Task.Delay(1500);
+        _copied = false;
+        StateHasChanged();
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _dotNetRef?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}

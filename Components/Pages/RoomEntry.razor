@@ -1,0 +1,65 @@
+@page "/"
+@inject NavigationManager Nav
+
+<PageTitle>FlowBoard Video Calls</PageTitle>
+
+<div class="room-entry-page">
+    <div class="room-entry-card">
+        <h1 class="brand">Flow<span class="brand-accent">Board</span></h1>
+
+        <div class="field-group">
+            <label for="displayName">Display Name</label>
+            <input id="displayName"
+                   @bind="_displayName" @bind:event="oninput"
+                   placeholder="e.g. Maria" />
+        </div>
+
+        <div class="field-group">
+            <label for="roomId">Room ID</label>
+            <div class="room-row">
+                <input id="roomId" class="font-mono"
+                       @bind="_roomId" @bind:event="oninput"
+                       placeholder="type or generate" />
+                <button type="button" class="btn-secondary" @onclick="GenerateRoomId">Generate</button>
+            </div>
+        </div>
+
+        <button type="button" class="btn-primary" disabled="@(!CanSubmit)" @onclick="JoinRoom">Create / Join</button>
+
+        <p class="hint">No account needed — just a name and a room ID.</p>
+    </div>
+</div>
+
+@code {
+    private string _displayName = string.Empty;
+    private string _roomId = string.Empty;
+
+    private bool CanSubmit => !string.IsNullOrWhiteSpace(_displayName) && !string.IsNullOrWhiteSpace(_roomId);
+
+    private const string RoomIdChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    private const int RoomIdLength = 8; // >= 6 alphanumeric chars per FR-3
+
+    private void GenerateRoomId()
+    {
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(RoomIdLength);
+        var chars = new char[RoomIdLength];
+        for (var i = 0; i < RoomIdLength; i++)
+        {
+            chars[i] = RoomIdChars[bytes[i] % RoomIdChars.Length];
+        }
+
+        _roomId = new string(chars);
+    }
+
+    private void JoinRoom()
+    {
+        if (!CanSubmit)
+        {
+            return;
+        }
+
+        var roomId = Uri.EscapeDataString(_roomId.Trim());
+        var name = Uri.EscapeDataString(_displayName.Trim());
+        Nav.NavigateTo($"/call/{roomId}?name={name}");
+    }
+}

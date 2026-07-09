@@ -1,0 +1,53 @@
+.call-view {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.topbar {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    padding: 0 var(--spacing-4);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.room-id-display {
+    color: var(--color-foreground-muted);
+    font-size: var(--font-caption-size);
+    cursor: pointer;
+}
+
+.room-id-display:hover {
+    color: var(--color-foreground);
+}
+
+.copy-icon {
+    color: var(--color-primary);
+}
+
+.copy-confirmation {
+    color: var(--color-primary);
+    font-size: var(--font-caption-size);
+}
+
+.roster-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.waiting-message {
+    color: var(--color-foreground-muted);
+    font-size: var(--font-body-size);
+}
+
+.participant-roster {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    color: var(--color-foreground);
+    font-size: var(--font-body-size);
+}
