@@ -250,6 +250,13 @@ function attachRemoteStream(peerId, stream) {
 }
 
 function attachRemoteStreamToElement(peerId, stream) {
+    if (!peerConnections.has(peerId)) {
+        // The peer already left (AD-8 close-then-delete already ran) before
+        // this retry loop found their tile -- stop polling for an element
+        // that will never exist again, rather than retrying forever.
+        return;
+    }
+
     const videoEl = document.getElementById("remote-video-" + peerId);
     if (videoEl) {
         videoEl.srcObject = stream;
@@ -278,10 +285,28 @@ function reattachRemoteStream(peerId) {
     }
 }
 
+/// Bug 3(a): the Grid <-> ScreenShareLayout transition (CallView.razor) is a
+/// structural @if/@else swap -- Blazor tears down and recreates every
+/// VideoTile's <video> element across it at once, not just one peer's (the
+/// scenario reattachRemoteStream above already handles). Re-attaches every
+/// currently-known remote camera stream in one pass so no thumbnail goes
+/// blank/silent just because the layout switched.
+function reattachAllRemoteStreams() {
+    remoteStreams.forEach(function (stream, peerId) {
+        attachRemoteStreamToElement(peerId, stream);
+    });
+}
+
 /// AD-7: the second, distinct stream.id for a given peerId is always the
 /// screen share (never a fresh getUserMedia/getDisplayMedia signal needed
 /// server-side -- purely a receiving-side arrival-order convention).
 function attachRemoteScreenStream(peerId, stream) {
+    if (!peerConnections.has(peerId)) {
+        // Same guard as attachRemoteStreamToElement -- the sharer already
+        // left before this retry loop found the main share view.
+        return;
+    }
+
     const videoEl = document.getElementById("screen-share-video");
     if (videoEl) {
         videoEl.srcObject = stream;

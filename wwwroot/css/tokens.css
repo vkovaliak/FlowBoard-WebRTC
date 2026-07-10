@@ -85,6 +85,13 @@
   --spacing-narrow-window-breakpoint: 1200px;
 }
 
+/* Reset the browser's default body margin -- without this, even an element
+   sized to exactly 100vh/100vw overflows the real viewport by the margin's
+   width on each axis, which is enough by itself to trigger page scrollbars. */
+html, body {
+  margin: 0;
+}
+
 /* Dark-mode-first: applied by default, not behind a media query or toggle. */
 body {
   background-color: var(--color-background);

@@ -1,11 +1,29 @@
 @* Screen-share-priority layout (FR-21, UX-DR7): large main view of the
    shared screen + a right-edge Thumbnail Strip of every participant's
    camera tile (including the sharer's own), matching
-   mockups/call-view-screenshare.html's .main-share / .thumb-strip shapes. *@
+   mockups/call-view-screenshare.html's .main-share / .thumb-strip shapes.
+
+   Bug 3(b): the sharer's OWN main view never renders their own captured
+   screenStream back into a visible element. Sharing the entire screen
+   captures this very browser tab -- piping that capture back into a video
+   element on the page it's capturing is an infinite recursive "hall of
+   mirrors." The sharer already sees their real screen; everyone ELSE'S
+   main view shows the real captured stream normally, since their own
+   monitor isn't what's being captured. *@
 
 <div class="screenshare-layout">
     <div class="main-share">
-        <video id="screen-share-video" autoplay playsinline></video>
+        @if (IsLocalSharer)
+        {
+            <div class="self-sharing-placeholder">
+                <span class="self-sharing-icon" aria-hidden="true">🖥️</span>
+                <p>You are sharing your screen</p>
+            </div>
+        }
+        else
+        {
+            <video id="screen-share-video" autoplay playsinline></video>
+        }
         <div class="share-chip">@SharerDisplayName is sharing their screen</div>
     </div>
 
@@ -16,5 +34,9 @@
 
 @code {
     [Parameter] public string? SharerDisplayName { get; set; }
+
+    /// <summary>True only on the active sharer's own Call View (Bug 3(b)) --
+    /// everyone else renders the real #screen-share-video normally.</summary>
+    [Parameter] public bool IsLocalSharer { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 }

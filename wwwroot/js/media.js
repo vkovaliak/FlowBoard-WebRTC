@@ -121,18 +121,3 @@ function stopScreenShareCapture() {
     }
 }
 
-/// Attaches the LOCAL sharer's own screenStream to the main share view
-/// (EXPERIENCE.md: "sharer sees their own share in the main view too, so
-/// they can confirm what others see"). Retries until the element exists --
-/// ScreenShareLayout.razor only renders once ScreenShareStateChanged comes
-/// back from the hub (Story 1.3's CallHub broadcasts SetSharingState to the
-/// whole group, including the caller), so there's a real render race here,
-/// same shape as every other stream-attach race in this codebase.
-function attachLocalScreenPreview() {
-    var videoEl = document.getElementById("screen-share-video");
-    if (videoEl && screenStream) {
-        videoEl.srcObject = screenStream;
-    } else if (screenStream) {
-        setTimeout(attachLocalScreenPreview, 100);
-    }
-}
