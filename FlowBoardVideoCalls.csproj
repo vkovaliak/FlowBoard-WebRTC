@@ -7,4 +7,14 @@
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- FlowBoard.Tests lives in a subfolder of this project's own
+         directory. Without this exclusion, Sdk.Web's default recursive
+         glob would sweep its .cs files into THIS project's compile items
+         too. -->
+    <Compile Remove="FlowBoard.Tests\**" />
+    <Content Remove="FlowBoard.Tests\**" />
+    <None Remove="FlowBoard.Tests\**" />
+  </ItemGroup>
+
 </Project>

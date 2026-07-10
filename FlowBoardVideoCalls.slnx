@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="FlowBoard.Tests/FlowBoard.Tests.csproj" />
+  <Project Path="FlowBoardVideoCalls.csproj" />
+</Solution>
