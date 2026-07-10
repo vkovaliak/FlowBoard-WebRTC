@@ -1,0 +1,20 @@
+@* Screen-share-priority layout (FR-21, UX-DR7): large main view of the
+   shared screen + a right-edge Thumbnail Strip of every participant's
+   camera tile (including the sharer's own), matching
+   mockups/call-view-screenshare.html's .main-share / .thumb-strip shapes. *@
+
+<div class="screenshare-layout">
+    <div class="main-share">
+        <video id="screen-share-video" autoplay playsinline></video>
+        <div class="share-chip">@SharerDisplayName is sharing their screen</div>
+    </div>
+
+    <div class="thumb-strip">
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? SharerDisplayName { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

@@ -1,8 +1,15 @@
 @* Fixed order per DESIGN.md.Components: Mic, Camera, Share Screen, Hang Up.
    Mic/Camera never carry the HTML `disabled` attribute -- while media access
    hasn't been granted, clicking them retries permission instead of toggling
-   (Story 2.1 AC), so they must stay clickable in every state. Share Screen
-   is present but functionally inert until Story 3.1. *@
+   (Story 2.1 AC), so they must stay clickable in every state.
+
+   Share Screen ALSO never carries the native `disabled` attribute, for a
+   different reason: a natively-disabled button is removed from the tab
+   order entirely, so a keyboard-only user could never focus it -- which
+   would silently break the "tooltip triggers on keyboard focus too"
+   requirement (UX-DR9). It uses aria-disabled (announced as disabled,
+   still focusable) and the click handler below guards against acting on it
+   instead. *@
 
 <div class="control-bar">
     <button type="button"
@@ -19,9 +26,20 @@
         <span aria-hidden="true">📷</span>
     </button>
 
-    <button type="button" class="control-button" aria-label="Share screen">
-        <span aria-hidden="true">🖥️</span>
-    </button>
+    <div class="control-button-wrapper">
+        <button type="button"
+                class="control-button @(IsShareDisabled ? "toggled-off" : (IsSharing ? "active" : ""))"
+                aria-label="@ShareAriaLabel"
+                aria-disabled="@(IsShareDisabled ? "true" : "false")"
+                @onclick="HandleShareClick">
+            <span aria-hidden="true">🖥️</span>
+        </button>
+
+        @if (IsShareDisabled && !string.IsNullOrEmpty(SharerDisplayName))
+        {
+            <span class="tooltip" role="tooltip">@SharerDisplayName is sharing their screen</span>
+        }
+    </div>
 
     <button type="button" class="control-button hang-up-button" aria-label="Hang up" @onclick="OnHangUp">
         <span aria-hidden="true">⏻</span>
@@ -32,8 +50,12 @@
     [Parameter] public bool HasMediaAccess { get; set; }
     [Parameter] public bool IsMuted { get; set; }
     [Parameter] public bool IsCameraOn { get; set; }
+    [Parameter] public bool IsSharing { get; set; }
+    [Parameter] public bool IsShareDisabled { get; set; }
+    [Parameter] public string? SharerDisplayName { get; set; }
     [Parameter] public EventCallback OnToggleMic { get; set; }
     [Parameter] public EventCallback OnToggleCamera { get; set; }
+    [Parameter] public EventCallback OnToggleShareScreen { get; set; }
     [Parameter] public EventCallback OnHangUp { get; set; }
 
     private string MicAriaLabel => !HasMediaAccess
@@ -43,4 +65,16 @@
     private string CameraAriaLabel => !HasMediaAccess
         ? "Enable camera access"
         : IsCameraOn ? "Turn camera off" : "Turn camera on";
+
+    private string ShareAriaLabel => IsShareDisabled && !string.IsNullOrEmpty(SharerDisplayName)
+        ? $"{SharerDisplayName} is sharing their screen"
+        : IsSharing ? "Stop sharing your screen" : "Share screen";
+
+    /// <summary>aria-disabled doesn't stop the click event natively (unlike
+    /// the real disabled attribute) -- this guard is what actually prevents
+    /// acting on the click while someone else is sharing.</summary>
+    private Task HandleShareClick()
+    {
+        return IsShareDisabled ? Task.CompletedTask : OnToggleShareScreen.InvokeAsync();
+    }
 }

@@ -52,3 +52,44 @@
 .hang-up-button:hover {
     background: var(--color-destructive-hover);
 }
+
+/* Filled teal while actively sharing -- the one control that reads as "on"
+   rather than merely "not off." */
+.control-button.active {
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+}
+
+.control-button[aria-disabled="true"] {
+    cursor: default;
+}
+
+.control-button-wrapper {
+    position: relative;
+}
+
+/* Keyboard-accessible tooltip (UX-DR9): :focus-within fires when the button
+   inside is Tab-focused, not just on :hover -- a plain `title` attribute
+   would only ever show on mouse hover in most browsers, which is exactly
+   the gap this requirement exists to close. */
+.tooltip {
+    position: absolute;
+    bottom: 56px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--rounded-sm);
+    padding: var(--spacing-1) var(--spacing-2);
+    font-size: var(--font-caption-size);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.1s;
+    z-index: 11;
+}
+
+.control-button-wrapper:hover .tooltip,
+.control-button-wrapper:focus-within .tooltip {
+    opacity: 1;
+}

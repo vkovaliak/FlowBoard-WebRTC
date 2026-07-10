@@ -1,0 +1,63 @@
+.screenshare-layout {
+    display: flex;
+    flex: 1;
+    gap: var(--spacing-3);
+    padding: var(--spacing-4);
+    min-height: calc(100vh - 41px);
+    box-sizing: border-box;
+    padding-bottom: 76px; /* clears the fixed Control Bar, same as .roster-area */
+}
+
+.main-share {
+    position: relative;
+    flex: 1;
+    background: var(--color-background);
+    border: 1px solid var(--color-primary);
+    border-radius: var(--rounded-lg);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.main-share video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+}
+
+.share-chip {
+    position: absolute;
+    top: var(--spacing-3);
+    left: var(--spacing-3);
+    background: rgba(0, 0, 0, 0.6);
+    color: var(--color-foreground);
+    font-size: var(--font-label-size);
+    font-weight: var(--font-label-weight);
+    padding: var(--spacing-1) var(--spacing-3);
+    border-radius: var(--rounded-sm);
+    z-index: 2;
+}
+
+/* Right-edge Thumbnail Strip -- deliberately placed here rather than the
+   bottom, since the Control Bar already occupies the bottom edge
+   (EXPERIENCE.md Component Patterns: Screen-share layout row). */
+.thumb-strip {
+    width: 220px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-3);
+    overflow-y: auto;
+}
+
+/* ::deep pierces Blazor's CSS isolation to reach VideoTile's internal
+   markup -- a plain descendant selector wouldn't match, since VideoTile's
+   elements carry VideoTile.razor.css's own scope attribute, not this
+   component's. */
+.thumb-strip ::deep .video-tile {
+    width: 100%;
+    height: 140px;
+    flex-shrink: 0;
+}
