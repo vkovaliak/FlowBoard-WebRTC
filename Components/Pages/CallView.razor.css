@@ -1,7 +1,15 @@
 .call-view {
-    min-height: 100vh;
+    /* Fixed viewport size, not min-height -- a growing min-height is exactly
+       what let the page stretch as tiles were added (FR-19/FR-20). overflow
+       hidden means content that would otherwise push past this box gets
+       clipped/reflowed by its own children's rules (below) instead of ever
+       growing the page. */
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
+    box-sizing: border-box;
 }
 
 .topbar {
@@ -34,6 +42,12 @@
 
 .roster-area {
     flex: 1;
+    /* A flex item's default min-height is `auto`, which means "at least as
+       tall as my content" -- that's what let tile content grow this past
+       the space .call-view's fixed height actually left for it. min-height:
+       0 lets flex:1 be the real, sole sizing rule, so this area always
+       exactly fills the remaining viewport space and never more. */
+    min-height: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -44,10 +58,6 @@
        its own spacing-4 offset from the viewport edge) so the last row of
        tiles is never hidden behind it. */
     padding-bottom: 76px;
-    /* topbar is 40px + its 1px border; leaves the rest of the viewport for
-       the grid so grid-many's max-height (below) can size itself against
-       what's actually left, not the full viewport. */
-    min-height: calc(100vh - 41px);
     box-sizing: border-box;
 }
 
@@ -63,6 +73,10 @@
     width: 100%;
     max-width: 1400px;
     flex: 1;
+    /* Same flex min-height:auto fix as .roster-area, one level down --
+       without it, this grid's own content (esp. the narrow-window rule
+       below) could still push .roster-area taller from the inside. */
+    min-height: 0;
 }
 
 .tile-strip.grid-1 {
@@ -98,20 +112,30 @@
    breakpoint = 1200px -- hardcoded here since CSS custom properties cannot
    be used inside an @media condition). */
 @media (max-width: 1200px) {
-    /* Low counts (<=4): reflow to a single column, tiles stay full-height,
-       rather than staying cramped side-by-side. */
+    /* Low counts (<=4): reflow to a single column, tiles stay full-height --
+       "full-height" means each tile fills its share of the available
+       column (grid-auto-rows: 1fr divides whatever space .tile-strip
+       actually has), NOT a fixed 60vh per tile regardless of how many are
+       stacked. The old fixed-60vh rule was exactly Bug 1: 2+ tiles at 60vh
+       each in one column already exceeds 100vh, which is what forced the
+       whole page to grow. max-height/overflow-y is a safety net matching
+       grid-many's existing pattern, in case even 1fr-divided rows still
+       can't fit a tile above its legibility floor. */
     .tile-strip.grid-1,
     .tile-strip.grid-2,
     .tile-strip.grid-quad {
         grid-template-columns: 1fr;
         grid-template-rows: none;
+        grid-auto-rows: 1fr;
         max-width: 100%;
+        max-height: 100%;
+        overflow-y: auto;
     }
 
     .tile-strip.grid-1 .video-tile,
     .tile-strip.grid-2 .video-tile,
     .tile-strip.grid-quad .video-tile {
-        min-height: 60vh;
+        min-height: 135px;
     }
 
     /* High count (5+): the min-tile-width floor plus vertical scroll is

@@ -36,7 +36,18 @@ function initializeCall(dotNetRef, roomId, displayName, iceServers) {
     // priority layout) comes from this same single callback, not a separate
     // local-only flag.
     connection.on("ScreenShareStateChanged", function (sharerConnectionId) {
-        dotNetRef.invokeMethodAsync("OnScreenShareStateChanged", sharerConnectionId);
+        dotNetRef.invokeMethodAsync("OnScreenShareStateChanged", sharerConnectionId).then(function () {
+            // Bug 3(a): this callback drives the Grid <-> ScreenShareLayout
+            // swap, which recreates EVERY <video> element at once (local
+            // preview + every remote camera tile), even though none of
+            // their tracks ever stopped (AD-6/AD-7 -- screen share is
+            // additive). Nothing else re-attaches srcObject after that
+            // swap, so without this the local self-view and every remote
+            // thumbnail would go blank/silent the moment the layout
+            // switches, in either direction (share starting OR stopping).
+            attachLocalVideoElement();
+            reattachAllRemoteStreams();
+        });
     });
 
     // AD-4: a disconnect is terminal -- no automatic reconnection is
@@ -133,7 +144,10 @@ function hangUp() {
 /// getDisplayMedia() -> addTrack to every existing RTCPeerConnection (AD-7,
 /// never replaceTrack) -> SetSharingState(true), which broadcasts
 /// ScreenShareStateChanged(myConnectionId) to the whole room including this
-/// client (FR-11).
+/// client (FR-11). Bug 3(b): deliberately never attaches the local capture
+/// back into a visible element on this client -- ScreenShareLayout.razor
+/// shows the sharer a "You are sharing" placeholder instead, so sharing the
+/// entire screen can't create a self-capturing feedback loop.
 function startScreenShare() {
     return captureScreenShare().then(function (screenStream) {
         var track = screenStream.getVideoTracks()[0];
@@ -144,7 +158,6 @@ function startScreenShare() {
             stopScreenShare();
         };
         addScreenTrackToAllConnections(screenStream);
-        attachLocalScreenPreview();
         return connection.invoke("SetSharingState", true);
     });
 }

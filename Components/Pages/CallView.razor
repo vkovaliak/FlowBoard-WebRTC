@@ -4,6 +4,7 @@
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 @inject Microsoft.Extensions.Options.IOptions<WebRtcOptions> WebRtcOptions
+@inject ILogger<CallView> Logger
 @implements IAsyncDisposable
 
 <PageTitle>FlowBoard Video Calls — @RoomId</PageTitle>
@@ -21,7 +22,7 @@
 
     @if (_activeSharerId is not null)
     {
-        <ScreenShareLayout SharerDisplayName="@ActiveSharerDisplayName">
+        <ScreenShareLayout SharerDisplayName="@ActiveSharerDisplayName" IsLocalSharer="@IsActiveSharer">
             <VideoTile DisplayName="@(DisplayName ?? "Guest")"
                         IsLocal="true"
                         HasMedia="@LocalHasVideo"
@@ -172,7 +173,7 @@
             .Select(s => new { urls = s.Urls })
             .ToArray();
 
-        await JS.InvokeVoidAsync("initializeCall", _dotNetRef, RoomId, DisplayName ?? "Guest", iceServers);
+        await InvokeJsSafelyAsync("initializeCall", _dotNetRef, RoomId, DisplayName ?? "Guest", iceServers);
     }
 
     /// <summary>Total tiles including self. Drives the CSS breakpoint class
@@ -288,12 +289,24 @@
     /// sharer (Story 1.3's CallHub broadcasts to the whole group), so this
     /// one callback drives the layout branch, the Share Screen disabled
     /// state, and the tooltip's sharer name for everyone from a single
-    /// source of truth.</summary>
+    /// source of truth.
+    ///
+    /// Bug 2 fix (AD-1): any exception thrown from a [JSInvokable] method is
+    /// fatal to the whole Blazor circuit by default -- this callback fires
+    /// on every renegotiation-driven layout switch, so it must never be
+    /// able to take the circuit down for a transient/unexpected state.</summary>
     [JSInvokable]
     public void OnScreenShareStateChanged(string? sharerConnectionId)
     {
-        _activeSharerId = sharerConnectionId;
-        StateHasChanged();
+        try
+        {
+            _activeSharerId = sharerConnectionId;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "OnScreenShareStateChanged failed for sharerConnectionId={SharerConnectionId}", sharerConnectionId);
+        }
     }
 
     /// <summary>Reports the outcome of the initial getUserMedia prompt *and*
@@ -330,7 +343,7 @@
         }
 
         _isMicMuted = !_isMicMuted;
-        await JS.InvokeVoidAsync("toggleMic");
+        await InvokeJsSafelyAsync("toggleMic");
     }
 
     /// <summary>Same dual-purpose pattern as ToggleMicAsync, for the Camera button.</summary>
@@ -343,13 +356,13 @@
         }
 
         _isCameraOn = !_isCameraOn;
-        await JS.InvokeVoidAsync("toggleCamera");
+        await InvokeJsSafelyAsync("toggleCamera");
     }
 
     private async Task RetryMediaPermissionAsync()
     {
         _hasAttemptedRetry = true;
-        await JS.InvokeVoidAsync("retryMediaPermission", _dotNetRef);
+        await InvokeJsSafelyAsync("retryMediaPermission", _dotNetRef);
     }
 
     /// <summary>FR-11/FR-13: only reachable when no one else is sharing
@@ -362,32 +375,54 @@
     {
         if (IsActiveSharer)
         {
-            await JS.InvokeVoidAsync("stopScreenShare");
+            await InvokeJsSafelyAsync("stopScreenShare");
         }
         else if (_activeSharerId is null)
         {
-            await JS.InvokeVoidAsync("startScreenShare");
+            await InvokeJsSafelyAsync("startScreenShare");
         }
     }
 
     /// <summary>FR-18: JS tears down every peer connection and local media,
     /// then stops the hub connection (triggering OnDisconnectedAsync server-
     /// side). Navigation back to Room Entry is this method's job, not JS's
-    /// (AD-1: navigation is a C# concern).</summary>
+    /// (AD-1: navigation is a C# concern). Always navigates away, even if
+    /// the JS-side teardown itself failed -- the user's Hang Up click must
+    /// still return them to Room Entry.</summary>
     private async Task HangUpAsync()
     {
-        await JS.InvokeVoidAsync("hangUp");
+        await InvokeJsSafelyAsync("hangUp");
         Nav.NavigateTo("/");
     }
 
     private async Task CopyRoomIdAsync()
     {
-        await JS.InvokeVoidAsync("navigator.clipboard.writeText", RoomId);
+        await InvokeJsSafelyAsync("navigator.clipboard.writeText", RoomId);
         _copied = true;
         StateHasChanged();
         await Task.Delay(1500);
         _copied = false;
         StateHasChanged();
+    }
+
+    /// <summary>Bug 2 fix (AD-1): the sole point every user-triggered JS
+    /// interop call in this component goes through. getDisplayMedia can
+    /// reject (user cancels the share picker), a hub round-trip inside the
+    /// JS call can fault, or the JS itself can throw -- any of those, left
+    /// unhandled, surfaces in C# as a JSException thrown out of an event
+    /// handler, which is fatal to the whole Blazor circuit by default.
+    /// Catching here means a recoverable JS-side failure ends that one
+    /// action instead of ending the call for everyone.</summary>
+    private async Task InvokeJsSafelyAsync(string identifier, params object?[] args)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync(identifier, args);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "JS interop call '{Identifier}' failed", identifier);
+        }
     }
 
     public ValueTask DisposeAsync()

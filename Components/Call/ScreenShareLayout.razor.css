@@ -3,7 +3,12 @@
     flex: 1;
     gap: var(--spacing-3);
     padding: var(--spacing-4);
-    min-height: calc(100vh - 41px);
+    /* Same fix as .roster-area (CallView.razor.css, Bug 1): a flex item's
+       default min-height: auto let this grow past .call-view's fixed
+       height once the thumbnail strip had enough tiles. min-height: 0 lets
+       flex: 1 be the only sizing rule, so .thumb-strip's own overflow-y:
+       auto (below) is what handles a tall roster, not the page. */
+    min-height: 0;
     box-sizing: border-box;
     padding-bottom: 76px; /* clears the fixed Control Bar, same as .roster-area */
 }
@@ -25,6 +30,28 @@
     height: 100%;
     object-fit: contain;
     background: #000;
+}
+
+/* Bug 3(b): the sharer's own placeholder, shown instead of a live video
+   element so their own capture is never piped back into a visible element
+   on the page it's capturing. */
+.self-sharing-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-3);
+    color: var(--color-foreground-muted);
+    text-align: center;
+}
+
+.self-sharing-icon {
+    font-size: 48px;
+}
+
+.self-sharing-placeholder p {
+    margin: 0;
+    font-size: var(--font-body-size);
 }
 
 .share-chip {
