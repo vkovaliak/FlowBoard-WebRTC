@@ -19,8 +19,9 @@
         }
     </div>
 
-    <div class="roster-area">
-        <div class="tile-strip @GridSizeClass">
+    @if (_activeSharerId is not null)
+    {
+        <ScreenShareLayout SharerDisplayName="@ActiveSharerDisplayName">
             <VideoTile DisplayName="@(DisplayName ?? "Guest")"
                         IsLocal="true"
                         HasMedia="@LocalHasVideo"
@@ -28,12 +29,6 @@
                         ShowSettingsHint="_showSettingsHint"
                         IsMuted="_isMicMuted" />
 
-            @* Remote camera-off is now real (ParticipantCameraChanged), not
-               optimistic -- Story 2.5. Remote permission-denied still can't
-               be distinguished from voluntary camera-off (no callback
-               carries that distinction across participants); a remote
-               camera-off tile always renders as voluntary. Known gap, not
-               fixed here -- flagged, not silently papered over. *@
             @foreach (var participant in _participants)
             {
                 <VideoTile @key="participant.ConnectionId"
@@ -44,19 +39,51 @@
                             HasConnectionIssue="@_connectionIssues.Contains(participant.ConnectionId)"
                             IsMuted="@_mutedParticipants.Contains(participant.ConnectionId)" />
             }
-        </div>
+        </ScreenShareLayout>
+    }
+    else
+    {
+        <div class="roster-area">
+            <div class="tile-strip @GridSizeClass">
+                <VideoTile DisplayName="@(DisplayName ?? "Guest")"
+                            IsLocal="true"
+                            HasMedia="@LocalHasVideo"
+                            IsPermissionDenied="@(_hasMediaAccess == false)"
+                            ShowSettingsHint="_showSettingsHint"
+                            IsMuted="_isMicMuted" />
 
-        @if (_participants.Count == 0)
-        {
-            <p class="waiting-message">Waiting for others to join…</p>
-        }
-    </div>
+                @* Remote camera-off is real (ParticipantCameraChanged). Remote
+                   permission-denied still can't be distinguished from voluntary
+                   camera-off (no callback carries that distinction across
+                   participants) -- known gap, flagged since Story 2.5, not fixed here. *@
+                @foreach (var participant in _participants)
+                {
+                    <VideoTile @key="participant.ConnectionId"
+                                ConnectionId="@participant.ConnectionId"
+                                DisplayName="@participant.DisplayName"
+                                IsLocal="false"
+                                HasMedia="@(!_camerasOff.Contains(participant.ConnectionId))"
+                                HasConnectionIssue="@_connectionIssues.Contains(participant.ConnectionId)"
+                                IsMuted="@_mutedParticipants.Contains(participant.ConnectionId)" />
+                }
+            </div>
+
+            @if (_participants.Count == 0)
+            {
+                <p class="waiting-message">Waiting for others to join…</p>
+            }
+        </div>
+    }
 
     <ControlBar HasMediaAccess="@(_hasMediaAccess == true)"
                 IsMuted="_isMicMuted"
                 IsCameraOn="_isCameraOn"
+                IsSharing="@IsActiveSharer"
+                IsShareDisabled="@(_activeSharerId is not null && !IsActiveSharer)"
+                SharerDisplayName="@ActiveSharerDisplayName"
                 OnToggleMic="ToggleMicAsync"
                 OnToggleCamera="ToggleCameraAsync"
+                OnToggleShareScreen="ToggleShareScreenAsync"
                 OnHangUp="HangUpAsync" />
 </div>
 
@@ -93,9 +120,43 @@
     private bool _isMicMuted;
     private bool _isCameraOn = true;
 
+    /// <summary>My own connectionId, learned once via a one-time JS callback
+    /// (OnLocalConnectionIdKnown) right after the hub connection starts.
+    /// Unlike mute/camera, SetSharingState's CallHub broadcast goes to the
+    /// WHOLE group including the caller -- so "am I the active sharer" is
+    /// derived from the same _activeSharerId every other participant uses,
+    /// not a separate optimistic flag.</summary>
+    private string? _myConnectionId;
+
+    /// <summary>The current active sharer's connectionId, or null if no one
+    /// is sharing (FR-11/FR-13). Source of truth for both the layout branch
+    /// (Grid vs ScreenShareLayout) and the Share Screen control's
+    /// disabled/tooltip state for every participant, including the sharer.</summary>
+    private string? _activeSharerId;
+
+    private bool IsActiveSharer => _activeSharerId is not null && _activeSharerId == _myConnectionId;
+
+    private string? ActiveSharerDisplayName
+    {
+        get
+        {
+            if (_activeSharerId is null)
+            {
+                return null;
+            }
+
+            if (_activeSharerId == _myConnectionId)
+            {
+                return DisplayName ?? "Guest";
+            }
+
+            return _participants.FirstOrDefault(p => p.ConnectionId == _activeSharerId)?.DisplayName;
+        }
+    }
+
     /// <summary>Local video shows only when media access is granted AND the
     /// camera hasn't been toggled off -- composes Story 2.1's permission
-    /// gate with this story's toggle state.</summary>
+    /// gate with Story 2.5's toggle state.</summary>
     private bool LocalHasVideo => _hasMediaAccess == true && _isCameraOn;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -131,11 +192,29 @@
     };
 
     [JSInvokable]
+    public void OnLocalConnectionIdKnown(string connectionId)
+    {
+        _myConnectionId = connectionId;
+    }
+
+    [JSInvokable]
     public void OnParticipantJoined(ParticipantDto participant)
     {
         if (_participants.All(p => p.ConnectionId != participant.ConnectionId))
         {
             _participants.Add(participant);
+
+            // Story 3.2: a late joiner's JoinRoom snapshot already carries
+            // IsSharing for anyone mid-share (CallHub.ToDto), so the
+            // screen-share-priority layout can switch on immediately --
+            // this doesn't need to wait for the second stream to arrive
+            // over the new RTCPeerConnection (Track-completeness corollary
+            // handles that separately, in webrtc-mesh.js).
+            if (participant.IsSharing)
+            {
+                _activeSharerId = participant.ConnectionId;
+            }
+
             StateHasChanged();
         }
     }
@@ -205,6 +284,18 @@
         StateHasChanged();
     }
 
+    /// <summary>FR-11/FR-13: fires for EVERY participant including the
+    /// sharer (Story 1.3's CallHub broadcasts to the whole group), so this
+    /// one callback drives the layout branch, the Share Screen disabled
+    /// state, and the tooltip's sharer name for everyone from a single
+    /// source of truth.</summary>
+    [JSInvokable]
+    public void OnScreenShareStateChanged(string? sharerConnectionId)
+    {
+        _activeSharerId = sharerConnectionId;
+        StateHasChanged();
+    }
+
     /// <summary>Reports the outcome of the initial getUserMedia prompt *and*
     /// every retryMediaPermission() attempt (Signaling &amp; Interop Contract).
     /// Distinguishing "first denial" from "retry denial" -- and therefore
@@ -259,6 +350,24 @@
     {
         _hasAttemptedRetry = true;
         await JS.InvokeVoidAsync("retryMediaPermission", _dotNetRef);
+    }
+
+    /// <summary>FR-11/FR-13: only reachable when no one else is sharing
+    /// (ControlBar disables the button otherwise, and guards the click
+    /// itself since the button can't carry a real `disabled` attribute --
+    /// see ControlBar.razor). No local optimistic flag is flipped here:
+    /// _activeSharerId updates only once OnScreenShareStateChanged reports
+    /// back from the hub.</summary>
+    private async Task ToggleShareScreenAsync()
+    {
+        if (IsActiveSharer)
+        {
+            await JS.InvokeVoidAsync("stopScreenShare");
+        }
+        else if (_activeSharerId is null)
+        {
+            await JS.InvokeVoidAsync("startScreenShare");
+        }
     }
 
     /// <summary>FR-18: JS tears down every peer connection and local media,

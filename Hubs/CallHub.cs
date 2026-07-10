@@ -75,22 +75,35 @@ public sealed class CallHub : Hub
         var (roomId, _) = _roomRegistry.SetSharingState(Context.ConnectionId, isSharing);
 
         var activeSharerConnectionId = isSharing ? Context.ConnectionId : null;
-        await Clients.Group(roomId).SendAsync("ScreenShareStateChanged", activeSharerConnectionId);
+        await BroadcastSharingState(roomId, activeSharerConnectionId);
     }
 
     /// <summary>Calls RoomRegistry.RemoveAndGetRemaining; broadcasts ParticipantLeft (AD-4).
-    /// Sole teardown path -- there is no separate LeaveRoom method.</summary>
+    /// Sole teardown path -- there is no separate LeaveRoom method. If the
+    /// disconnecting participant was the active sharer (AD-7), a disconnect
+    /// ends the share exactly like an explicit Stop Sharing click -- reusing
+    /// BroadcastSharingState (the same call SetSharingState makes) rather
+    /// than a parallel code path, so remaining Call Views reflow through the
+    /// identical ScreenShareStateChanged(null) handler either way (FR-14).</summary>
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        var (roomId, _) = _roomRegistry.RemoveAndGetRemaining(Context.ConnectionId);
+        var (roomId, _, wasSharing) = _roomRegistry.RemoveAndGetRemaining(Context.ConnectionId);
 
         if (roomId is not null)
         {
             await Clients.OthersInGroup(roomId).SendAsync("ParticipantLeft", Context.ConnectionId);
+
+            if (wasSharing)
+            {
+                await BroadcastSharingState(roomId, null);
+            }
         }
 
         await base.OnDisconnectedAsync(exception);
     }
+
+    private Task BroadcastSharingState(string roomId, string? sharerConnectionId) =>
+        Clients.Group(roomId).SendAsync("ScreenShareStateChanged", sharerConnectionId);
 
     private static ParticipantDto ToDto(ParticipantRecord record) =>
         new(record.ConnectionId, record.DisplayName, record.IsSharing);

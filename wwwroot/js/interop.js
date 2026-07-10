@@ -31,6 +31,14 @@ function initializeCall(dotNetRef, roomId, displayName, iceServers) {
         dotNetRef.invokeMethodAsync("OnParticipantCameraChanged", connectionId, isCameraOn);
     });
 
+    // Story 1.3's CallHub broadcasts this to the WHOLE group, including the
+    // caller -- so the sharer's own C# state (and their own screen-share-
+    // priority layout) comes from this same single callback, not a separate
+    // local-only flag.
+    connection.on("ScreenShareStateChanged", function (sharerConnectionId) {
+        dotNetRef.invokeMethodAsync("OnScreenShareStateChanged", sharerConnectionId);
+    });
+
     // AD-4: a disconnect is terminal -- no automatic reconnection is
     // attempted anywhere in this module (matches PRD's no-auto-reconnect
     // non-goal). pagehide proactively closes the connection on refresh/
@@ -51,6 +59,10 @@ function initializeCall(dotNetRef, roomId, displayName, iceServers) {
 
     var joinPromise = connection.start()
         .then(function () {
+            // One-time: lets CallView.razor tell "am I the active sharer"
+            // apart from "someone else is" using the SAME ScreenShareStateChanged
+            // value everyone else uses, rather than a separate optimistic flag.
+            dotNetRef.invokeMethodAsync("OnLocalConnectionIdKnown", connection.connectionId);
             return connection.invoke("JoinRoom", roomId, displayName);
         })
         .then(function (existingParticipants) {
@@ -116,4 +128,39 @@ function hangUp() {
         return connection.stop();
     }
     return Promise.resolve();
+}
+
+/// getDisplayMedia() -> addTrack to every existing RTCPeerConnection (AD-7,
+/// never replaceTrack) -> SetSharingState(true), which broadcasts
+/// ScreenShareStateChanged(myConnectionId) to the whole room including this
+/// client (FR-11).
+function startScreenShare() {
+    return captureScreenShare().then(function (screenStream) {
+        var track = screenStream.getVideoTracks()[0];
+        // The browser's own "Stop sharing" bar ends the track directly --
+        // run the exact same teardown as our Stop Sharing button so state
+        // never drifts out of sync between the two paths.
+        track.onended = function () {
+            stopScreenShare();
+        };
+        addScreenTrackToAllConnections(screenStream);
+        attachLocalScreenPreview();
+        return connection.invoke("SetSharingState", true);
+    });
+}
+
+/// removeTrack from every connection (same renegotiation pattern as start,
+/// via each pc's own onnegotiationneeded) -> release the capture -> tell the
+/// hub sharing stopped. Guarded against a stray call when nothing is
+/// actually being shared (e.g. a duplicate invocation from both a manual
+/// click and the native "Stop sharing" bar's onended firing).
+function stopScreenShare() {
+    var screenStream = getScreenStream();
+    if (!screenStream) {
+        return Promise.resolve();
+    }
+
+    removeScreenTrackFromAllConnections(screenStream);
+    stopScreenShareCapture();
+    return connection.invoke("SetSharingState", false);
 }

@@ -58,21 +58,24 @@ public sealed class RoomRegistry
     }
 
     /// <summary>
-    /// Removes the caller and returns who's left in their Room, atomically.
-    /// CallHub.OnDisconnectedAsync is the sole caller and the sole teardown
-    /// path -- there is no separate LeaveRoom method.
+    /// Removes the caller and returns who's left in their Room, atomically --
+    /// plus whether the removed participant was the active sharer (AD-7), so
+    /// CallHub.OnDisconnectedAsync can clear the share as part of the same
+    /// atomic step that removed them, rather than a second, separately-timed
+    /// lookup. CallHub.OnDisconnectedAsync is the sole caller and the sole
+    /// teardown path -- there is no separate LeaveRoom method.
     /// </summary>
-    public (string? RoomId, IReadOnlyList<ParticipantRecord> Remaining) RemoveAndGetRemaining(string connectionId)
+    public (string? RoomId, IReadOnlyList<ParticipantRecord> Remaining, bool WasSharing) RemoveAndGetRemaining(string connectionId)
     {
         lock (_lock)
         {
             if (!_participants.TryRemove(connectionId, out var removed))
             {
-                return (null, Array.Empty<ParticipantRecord>());
+                return (null, Array.Empty<ParticipantRecord>(), false);
             }
 
             var remaining = GetParticipantsNoLock(removed.RoomId);
-            return (removed.RoomId, remaining);
+            return (removed.RoomId, remaining, removed.IsSharing);
         }
     }
 

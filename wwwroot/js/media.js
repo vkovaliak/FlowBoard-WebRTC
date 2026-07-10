@@ -93,3 +93,46 @@ function stopLocalMedia() {
         cameraStream = null;
     }
 }
+
+// --- Screen sharing (AD-7). screenStream is a SEPARATE MediaStream object
+// from cameraStream -- never the same object, never mixed tracks -- so the
+// receiving side's AD-7 disambiguation (first stream seen = camera, second
+// distinct stream = screen) has two genuinely distinct stream identities to
+// tell apart. ---
+
+let screenStream = null;
+
+async function captureScreenShare() {
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    return screenStream;
+}
+
+function getScreenStream() {
+    return screenStream;
+}
+
+/// interop.js's stopScreenShare() calls this AFTER removing the track from
+/// every RTCPeerConnection -- stopping the track first would leave a
+/// dangling sender on each pc.
+function stopScreenShareCapture() {
+    if (screenStream) {
+        screenStream.getTracks().forEach(function (t) { t.stop(); });
+        screenStream = null;
+    }
+}
+
+/// Attaches the LOCAL sharer's own screenStream to the main share view
+/// (EXPERIENCE.md: "sharer sees their own share in the main view too, so
+/// they can confirm what others see"). Retries until the element exists --
+/// ScreenShareLayout.razor only renders once ScreenShareStateChanged comes
+/// back from the hub (Story 1.3's CallHub broadcasts SetSharingState to the
+/// whole group, including the caller), so there's a real render race here,
+/// same shape as every other stream-attach race in this codebase.
+function attachLocalScreenPreview() {
+    var videoEl = document.getElementById("screen-share-video");
+    if (videoEl && screenStream) {
+        videoEl.srcObject = screenStream;
+    } else if (screenStream) {
+        setTimeout(attachLocalScreenPreview, 100);
+    }
+}
