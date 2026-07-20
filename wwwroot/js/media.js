@@ -15,6 +15,14 @@ let cameraStream = null;
 function attachLocalVideoElement() {
     var videoEl = document.getElementById("local-video");
     if (videoEl && cameraStream) {
+        // Razor's muted="@IsLocal" (VideoTile.razor) sets the content
+        // attribute, but Blazor creates/updates this element via DOM diffing
+        // rather than HTML parsing, and HTMLMediaElement.muted is a live IDL
+        // property that isn't guaranteed to stay derived from that attribute
+        // once srcObject is assigned here. Set it explicitly so local
+        // playback is silenced regardless of that race -- this only affects
+        // local audio OUTPUT, not the outgoing tracks peers receive.
+        videoEl.muted = true;
         videoEl.srcObject = cameraStream;
     } else if (cameraStream) {
         // The <video> element only renders once C# sets HasMedia=true in
